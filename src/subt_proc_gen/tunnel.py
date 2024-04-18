@@ -242,7 +242,6 @@ class Tunnel:
         nodes.append(nodes[-1] + prev_direction)
         while d < params.distance:
             new_dir = params.get_new_direction(prev_direction)
-            print(new_dir)
             nodes.append(nodes[-1] + new_dir)
             d += new_dir.length
             prev_direction = new_dir

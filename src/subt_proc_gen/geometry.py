@@ -112,9 +112,7 @@ class Vector3D:
         elif isinstance(other, Vector3D):
             return Vector3D(self.xyz - other.xyz)
         else:
-            raise NotImplementedError(
-                f"Vector does not support subtracting {type(other)}"
-            )
+            raise NotImplementedError(f"Vector does not support subtracting {type(other)}")
 
     def __str__(self):
         return f"[{self.x},{self.x},{self.z}]"
@@ -228,9 +226,7 @@ class Spline3D:
     """Wrapper around the scipy spline to
     interpolate a series of 3d points along x,y and z"""
 
-    def __init__(
-        self, points, initial_dir: Vector3D = None, final_dir: Vector3D = None
-    ):
+    def __init__(self, points, initial_dir: Vector3D = None, final_dir: Vector3D = None):
         for p in points:
             assert isinstance(p, Point3D)
         self._points = list(points)
@@ -245,9 +241,7 @@ class Spline3D:
             self._initial_dir = self._initial_dir.normalized
             self._initial_dir.set_distance(0.1)
             initial_point = points[0] - self._initial_dir
-            self._calculation_points = np.vstack(
-                (initial_point.xyz, self._calculation_points)
-            )
+            self._calculation_points = np.vstack((initial_point.xyz, self._calculation_points))
             self._initial_offset = 0.1
         else:
             self._initial_offset = 0
@@ -255,15 +249,14 @@ class Spline3D:
             self._final_dir = self._final_dir.normalized
             self._final_dir.set_distance(0.1)
             final_point = points[-1] + self._final_dir
-            self._calculation_points = np.vstack(
-                (self._calculation_points, final_point.xyz)
-            )
+            self._calculation_points = np.vstack((self._calculation_points, final_point.xyz))
         self._n_calculation_points = len(self._calculation_points)
         dist_array = np.zeros(shape=[self._n_calculation_points, 1])
         for i in range(1, self._n_calculation_points):
             dist_array[i, :] = dist_array[i - 1] + np.linalg.norm(
                 self._calculation_points[i, :] - self._calculation_points[i - 1, :]
             )
+        self._dist_array = dist_array
         self._distance = dist_array[-1]
         self._degree = 3 if len(dist_array) > 3 else len(dist_array) - 1
         self.xspline = interpolate.splrep(
@@ -276,6 +269,9 @@ class Spline3D:
             dist_array, self._calculation_points[:, 2], k=self._degree
         )
         self._discretized_cache = dict()
+
+    def to_json(self):
+        pass
 
     def __call__(self, d):
         # assert d >= 0 and d <= self._distance
@@ -313,9 +309,7 @@ class Spline3D:
     ):
         ds, ps, vs = self.discretize(discretization_precision)
         # get only the points of the spline close to point
-        ids = get_indices_close_to_point(
-            ps, point, threshold_distance, horizontal_distance=False
-        )
+        ids = get_indices_close_to_point(ps, point, threshold_distance, horizontal_distance=False)
         if len(ids) == 0:
             return None
         ps, vs = ps[ids, :], vs[ids, :]
@@ -394,9 +388,7 @@ def format_coords(coords):
 def get_two_perpendicular_vectors(i_vector) -> tuple[Vector3D, Vector3D]:
     vector = Vector3D(i_vector)
     pho, theta, phi = np.reshape(vector.ptp, -1)
-    derived_vector = Vector3D(
-        (pho, theta, phi - np.deg2rad(0.01)), spherical_coords=True
-    )
+    derived_vector = Vector3D((pho, theta, phi - np.deg2rad(0.01)), spherical_coords=True)
     u = Vector3D(np.cross(vector.cartesian_unitary, derived_vector.cartesian_unitary))
     v = Vector3D(np.cross(vector.cartesian_unitary, u.cartesian_unitary))
     u.normalize()
@@ -465,12 +457,10 @@ def check_spline_collision(
     spd2 = spline2.discretize(discretization_precision)[1]
     if not omision_points is None:
         if omision_distances is None:
-            omision_distances = [
-                collision_distance * 2 for _ in range(len(omision_points))
-            ]
+            omision_distances = [collision_distance * 2 for _ in range(len(omision_points))]
         for op, od in zip(omision_points, omision_distances):
             spd1 = np.delete(spd1, get_close_points_indices(op, spd1, od), axis=0)
-            #spd2 = np.delete(spd2, get_close_points_indices(op, spd2, od), axis=0)
+            # spd2 = np.delete(spd2, get_close_points_indices(op, spd2, od), axis=0)
     return np.any(distance_matrix(spd1, spd2) < collision_distance)
 
 

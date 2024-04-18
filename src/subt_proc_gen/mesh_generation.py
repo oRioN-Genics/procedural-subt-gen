@@ -206,14 +206,22 @@ class TunnelNetworkMeshGenerator:
 
     @property
     def aps_of_intersections(self):
-        return np.vstack(
-            [self.aps_of_intersction(intersection) for intersection in self.intersections]
+        return (
+            np.vstack(
+                [self.aps_of_intersction(intersection) for intersection in self.intersections]
+            )
+            if len(self.intersections) > 0
+            else np.zeros((0, 3))
         )
 
     @property
     def avs_of_intersections(self):
-        return np.vstack(
-            [self.avs_of_intersction(intersection) for intersection in self.intersections]
+        return (
+            np.vstack(
+                [self.avs_of_intersction(intersection) for intersection in self.intersections]
+            )
+            if len(self.intersections) > 0
+            else np.zeros((0, 3))
         )
 
     @property
@@ -508,10 +516,17 @@ class TunnelNetworkMeshGenerator:
         log.info("Flattening floors")
         self._flatten_floors()
 
-    def compute_all(self):
+    def compute_all(self, compute_floors=True):
         self.compute_ptcl()
         self.compute_mesh()
-        self.compute_floors()
+        self.add_noise_to_mesh()
+        if compute_floors:
+            self.compute_floors()
+
+    def add_noise_to_mesh(self):
+        vertices = np.asarray(self.mesh.vertices)
+        vertices += np.random.uniform(-0.1, 0.1, vertices.shape)
+        self.mesh.vertices = o3d.utility.Vector3dVector(vertices)
 
     def _compute_mesh(self):
         points = self.ps
@@ -539,7 +554,6 @@ class TunnelNetworkMeshGenerator:
     def _flatten_floors(self):
         # TODO: No longer use radius in smoothing, use the connected vertices
         vertices = np.asarray(self.mesh.vertices)
-        n_points = len(vertices)
         fta_dist = self._meshing_params.fta_distance
         floor_vertices_idxs = set()
         pb = tqdm(total=len(vertices), desc="Checking wich vertices are floors")
@@ -620,8 +634,9 @@ class TunnelNetworkMeshGenerator:
             for vert_n, vert_idx in enumerate(floor_vertices_idxs):
                 adj_verts_idxs = floor_adj_list[vert_idx]
                 neigh_verts = copied_verts[adj_verts_idxs, :]
-                avg_z = np.average(neigh_verts[:, 2])
-                vertices[vert_idx, 2] = avg_z
+                if len(neigh_verts) > 0:
+                    avg_z = np.average(neigh_verts[:, 2])
+                    vertices[vert_idx, 2] = avg_z
                 pb.update(1)
         self.mesh.vertices = o3d.utility.Vector3dVector(vertices)
 
