@@ -762,7 +762,7 @@ def points_inside_of_tunnel_section(
         )
         outside_because_of_angle = np.abs(projection) > max_projection_over_axis
     else:
-        outside_because_of_angle = np.zeros((points.shape[0]), dtype=np.bool8)
+        outside_because_of_angle = np.zeros((points.shape[0]), dtype=np.bool)
     dist_of_ps_to_tps = distance_matrix(points, tunnel_points)
     dist_of_tps_to_aps = distance_matrix(tunnel_points, axis_points)
     dist_to_ap_of_p = np.min(dist_of_ps_to_aps, axis=1)
