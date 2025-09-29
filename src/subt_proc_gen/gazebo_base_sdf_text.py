@@ -34,7 +34,6 @@ MODEL_BASE_SDF = """<?xml version="1.0"?>
             <collision name="collision">
                 <geometry>
                     <mesh>
-                        <!-- Add the relative path here -->\n\
                         <uri>{}</uri>
                     </mesh>
                 </geometry>
@@ -42,7 +41,6 @@ MODEL_BASE_SDF = """<?xml version="1.0"?>
             <visual name='CaveWall_visual'>
                     <geometry>
                       <mesh>
-                        <!-- Add the relative path here -->\n\
                         <uri>{}</uri>
                       </mesh>
                     </geometry>
