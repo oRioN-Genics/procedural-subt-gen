@@ -21,6 +21,7 @@ from subt_proc_gen.mesh_generation import (
     TunnelNetworkPtClGenParams,
     TunnelNetworkMeshGenParams,
 )
+from subt_proc_gen.gazebo_file_gen import mesh_generator_to_gazebo_model
 
 matplotlib.use("Qt5Agg")
 
@@ -635,6 +636,9 @@ class MainWindow(QtWidgets.QMainWindow):
         tb.addAction("Save", self.save_mesh).setIcon(QIcon.fromTheme("document-save"))
         vbox.addWidget(tb)
         vbox.addWidget(self.frame2)
+        tb.addAction("Export Gazebo Model", self.export_gazebo_model).setIcon(
+            QIcon.fromTheme("document-export")
+        )
 
         self.tab.addTab(helper, "Mesh")
 
@@ -809,6 +813,69 @@ class MainWindow(QtWidgets.QMainWindow):
             if not name.endswith(".obj"):
                 name = name + ".obj"
             self.mesh_generator.save_mesh(name)
+
+    def export_gazebo_model(self):
+        if self.mesh_generator is None:
+            QtWidgets.QMessageBox.warning(self, "No Mesh", "Run Go -> Render first to compute a mesh")
+            return
+        
+        out_dir = QFileDialog.getExistingDirectory(
+            self, "Choose/Create Gazebo model folder parent"
+        )
+        if not out_dir:
+            return
+        
+        name, ok = QInputDialog.getText(
+            self, "Model Name", "Enter a short model name", QtWidgets.QLineEdit.Normal, "cave_tunnel"
+        )
+        if not ok or not name.strip():
+            return
+        name = name.strip()
+
+        import os
+        model_folder = os.path.join(out_dir, name)
+
+        try:
+            if getattr(self.mesh_generator, "pyvista_mesh", None) is None:
+                self.mesh_generator.compute_mesh()
+                self.mesh_generator.compute_floors()
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Mesh Error", f"Could not compute mesh:\n{e}")
+            return
+        
+        try:
+            mg = self.mesh_generator
+            try:
+                mesh_generator_to_gazebo_model(mg, model_folder)
+            except TypeError:
+                mesh_obj = getattr(mg, "mesh", getattr(mg, "pyvista_mesh", None))
+                if mesh_obj is None:
+                    raise RuntimeError("No mesh attribute found on mesh_generator")
+                mesh_generator_to_gazebo_model(mesh_obj, model_folder)
+        except Exception as e:
+            QtWidgets.QMessageBox.critical(self, "Export failed", f"Gazebo export failed:\n{e}")
+            return
+        
+        snippet = (
+        "<include>\n"
+        f"  <uri>model://{name}</uri>\n"
+        "  <pose>0 0 0 0 0 0</pose>\n"
+        "</include>"
+        )
+        msg = QtWidgets.QMessageBox(self)
+        msg.setWindowTitle("Export complete")
+        msg.setIcon(QtWidgets.QMessageBox.Information)
+        msg.setText(
+            f"Gazebo model created at:\n{model_folder}\n\n"
+            "To make Gazebo find it, add the parent path to your environment:\n\n"
+            "  Gazebo Sim (gz sim):\n"
+            f"    export GZ_SIM_RESOURCE_PATH=$GZ_SIM_RESOURCE_PATH:{out_dir}\n\n"
+            "  Gazebo Classic:\n"
+            f"    export GAZEBO_MODEL_PATH=$GAZEBO_MODEL_PATH:{out_dir}\n\n"
+            "Then add this to your world SDF:"
+        )
+        msg.setDetailedText(snippet)
+        msg.exec_()
 
     def thread_run(self, func):
         self.plotter2.clear()
