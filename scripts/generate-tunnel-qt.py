@@ -498,6 +498,7 @@ class MainWindow(QtWidgets.QMainWindow):
       <collision name="collision">\n\
         <geometry>\n\
           <mesh>\n\
+            <!-- Add the relative path here -->\n\
             <uri>./mesh.obj</uri>\n\
           </mesh>\n\
         </geometry>\n\
@@ -505,6 +506,7 @@ class MainWindow(QtWidgets.QMainWindow):
       <visual name="visual">\n\
         <geometry>\n\
           <mesh>\n\
+            <!-- Add the relative path here -->\n\
             <uri>./mesh.obj</uri>\n\
           </mesh>\n\
         </geometry>\n\
