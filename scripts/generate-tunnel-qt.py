@@ -4,6 +4,8 @@ import sys
 
 import matplotlib
 import pyvista
+import yaml
+import numpy as np
 
 sys.path.append("src")
 
@@ -46,7 +48,7 @@ from PyQt5.QtWidgets import (
     QScrollArea,
     QProgressDialog,
 )
-from pyvista import QtInteractor
+# from pyvista import QtInteractor
 from pyvistaqt import QtInteractor
 from subt_proc_gen.tunnel import *
 from PyQt5 import QtWidgets, QtGui
@@ -144,8 +146,10 @@ class Sketch(QLabel):
                 tree_nodes = []
                 for node_id in tree["nodes"]:
                     tree_nodes.append(self.points[node_id])
+                cfg = tree.get("config", {}) or {}
+                cfg.setdefault("open_ends", []) 
                 self.trees.append(
-                    {"nodes": tree_nodes, "color": color, "config": tree["config"]}
+                    {"nodes": tree_nodes, "color": color, "config": cfg}
                 )
             self.color_index = len(self.trees) - 1
             self.update()
@@ -227,6 +231,14 @@ class Sketch(QLabel):
 
                 qm = QMenu()
 
+                if "open_ends" not in selected_tree.get("config", {}):
+                    selected_tree.setdefault("config", {})
+                    selected_tree["config"].setdefault("open_ends", [])
+
+                toggle_open = qm.addAction("Toggle Open End")
+                toggle_open.setCheckable(True)
+                toggle_open.setChecked(p.index in selected_tree["config"]["open_ends"])
+
                 set_z, cont = qm.addAction("Set Z"), None
                 change_config, cont = qm.addAction("Change Tunnel Config"), None
                 if p == selected_tree.get("nodes")[-1]:
@@ -238,6 +250,15 @@ class Sketch(QLabel):
                     self.p1 = p
                     self.current_tree_index = self.trees.index(selected_tree)
                     self.color_index = selected_tree.get("color")
+                    return
+                
+                elif res == toggle_open:
+                    lst = selected_tree["config"]["open_ends"]
+                    if p.index in lst:
+                        lst.remove(p.index)
+                    else:
+                        lst.append(p.index)
+                    self.update()
                     return
 
                 elif res == set_z:
@@ -313,7 +334,12 @@ class Sketch(QLabel):
             for p in tree.get("nodes"):
                 tree_nodes.append(nodes[p.index])
             trees_list.append(
-                {"tree_nodes": tree_nodes, "tree_config": tree.get("config")}
+                {
+                    "tree_nodes": tree_nodes,
+                    "tree_config": tree.get("config"),
+                    "node_indices": [p.index for p in tree.get("nodes")],
+                    "open_ends": tree.get("config", {}).get("open_ends", [])
+                }
             )
         return trees_list
         # return nodes, node_trees
@@ -703,23 +729,33 @@ class MainWindow(QtWidgets.QMainWindow):
             if not dest.endswith(".ptg"):
                 dest = dest + ".ptg"
             self.sketch.clear_points()
-            self.config.set("last", dest)
+            # self.config.set("last", dest)
+            self.config["last"] = dest
             self.setWindowTitle(self.config.get("last"))
             self.sketch.save(dest)
+            self.save_config()
 
     def load_yaml(self):
         file, _ = QFileDialog.getOpenFileName(
             self, "Open PTG file", "", "PTG Files (*.ptg)"
         )
         if file is not None and file != "":
-            self.config.set("last", file)
+            # self.config.set("last", file)
+            self.config["last"] = file
             self.setWindowTitle(self.config.get("last"))
             self.sketch.load(file)
-            self.config.save("gst.yaml")
+            # self.config.save("gst.yaml")
+            self.save_config()
 
+    # def edit(self):
+    #     self.config.edit()
+    #     self.config.save("gst.yaml")
+    
     def edit(self):
-        self.config.edit()
-        self.config.save("gst.yaml")
+        QtWidgets.QMessageBox.information(
+            self, "Config", "No editable settings here. (Using simple dict config.)"
+    )
+
 
     def show_mesh(self):
         mesh = pyvista.read(self.model_path + "mesh.obj")
@@ -735,12 +771,19 @@ class MainWindow(QtWidgets.QMainWindow):
     def do_render_mesh(self):
         self.mesh_generator.compute_mesh()
         self.mesh_generator.compute_floors()
-        plot_mesh(self.plotter2, self.mesh_generator)
+        opened = self._apply_open_end_cuts() 
+        # plot_mesh(self.plotter2, self.mesh_generator)
+        self.plotter2.clear()
+        if opened is not None:
+            self.plotter2.add_mesh(opened, show_edges=True)
+        else:
+            plot_mesh(self.plotter2, self.mesh_generator)
+
         self.pd.hide()
 
     def do_create_pctl(self):
         # mesh = mesh.clip("x", invert=False, origin=(2, 0, 0))
-
+        built_tunnels = []
         trees = self.sketch.getPoints(self.scale_slider.value() / 10)
         if trees is None:
             self.pd.hide()
@@ -763,7 +806,19 @@ class MainWindow(QtWidgets.QMainWindow):
             for node in tree.get("tree_nodes"):
                 tunnel.append_node(node)
             tunnel_network.add_tunnel(tunnel)
+            built_tunnels.append(tunnel)
             tunnels_config[tunnel] = tree.get("tree_config")
+        
+        self._open_end_map = {}
+
+        for tunnel, tree in zip(built_tunnels, trees):
+            idxs = tree.get("node_indices", [])
+            opens = set(tree.get("open_ends", []))
+
+            open_first = bool(idxs) and (idxs[0] in opens)
+            open_last = bool(idxs) and (idxs[-1] in opens)
+
+            self._open_end_map[tunnel] = {"open_first": open_first, "open_last": open_last}
 
         plot_graph(self.plotter2, tunnel_network)
         plot_splines(self.plotter2, tunnel_network, color="r")
@@ -812,7 +867,14 @@ class MainWindow(QtWidgets.QMainWindow):
         if name is not None and name != "":
             if not name.endswith(".obj"):
                 name = name + ".obj"
-            self.mesh_generator.save_mesh(name)
+                opened = getattr(self, "_opened_mesh", None)
+            if opened is not None:
+                try:
+                    opened.save(name)
+                except Exception:
+                    pyvista.save_meshio(name, opened)        
+            else:
+                self.mesh_generator.save_mesh(name)
 
     def export_gazebo_model(self):
         if self.mesh_generator is None:
@@ -839,19 +901,25 @@ class MainWindow(QtWidgets.QMainWindow):
             if getattr(self.mesh_generator, "pyvista_mesh", None) is None:
                 self.mesh_generator.compute_mesh()
                 self.mesh_generator.compute_floors()
+                self._apply_open_end_cuts() 
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Mesh Error", f"Could not compute mesh:\n{e}")
             return
         
+        mesh_for_export = getattr(self, "_opened_mesh", None)
+
         try:
-            mg = self.mesh_generator
-            try:
-                mesh_generator_to_gazebo_model(mg, model_folder, name)
-            except TypeError:
-                mesh_obj = getattr(mg, "mesh", getattr(mg, "pyvista_mesh", None))
-                if mesh_obj is None:
-                    raise RuntimeError("No mesh attribute found on mesh_generator")
-                mesh_generator_to_gazebo_model(mesh_obj, model_folder, name)
+            if mesh_for_export is not None:
+                mesh_generator_to_gazebo_model(mesh_for_export, model_folder, name)
+            else:
+                mg = self.mesh_generator
+                try:
+                    mesh_generator_to_gazebo_model(mg, model_folder, name)
+                except TypeError:
+                    mesh_obj = getattr(mg, "mesh", getattr(mg, "pyvista_mesh", None))
+                    if mesh_obj is None:
+                        raise RuntimeError("No mesh attribute found on mesh_generator")
+                    mesh_generator_to_gazebo_model(mesh_obj, model_folder, name)
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Export failed", f"Gazebo export failed:\n{e}")
             return
@@ -888,7 +956,7 @@ class MainWindow(QtWidgets.QMainWindow):
             def run(self) -> None:
                 self.callback()
 
-        self.tab.setCurrentIndex(2)
+        self.tab.setCurrentIndex(1)
         self.pd = QProgressDialog(self)
         self.pd.setMaximum(0)
         self.pd.setCancelButton(None)
@@ -902,6 +970,61 @@ class MainWindow(QtWidgets.QMainWindow):
     def closeEvent(self, a0: QtGui.QCloseEvent) -> None:
         self.sketch.save("kakka2.yaml")
 
+    def _apply_open_end_cuts(self):
+        if self.mesh_generator is None:
+            return
+        if not hasattr(self, "_open_end_map") or not self._open_end_map:
+            return
+        
+        mg = self.mesh_generator
+
+        mesh = getattr(mg, "pyvista_mesh", None)
+        if mesh is None:
+            mesh = getattr(mg, "mesh", None)
+            try:
+                mesh = pyvista.wrap(mesh) if mesh is not None else None
+            except Exception:
+                mesh = None
+
+        if mesh is None:
+            return
+        
+        def _vec(a, b):
+            v = np.array([a.x - b.x, a.y - b.y, a.z - b.z], dtype=float)
+            n = np.linalg.norm(v)
+            return v / (n + 1e-12)
+        
+        def _clip_keep_inside(m, normal, origin):
+            side_a = m.clip(normal=normal, origin=origin, invert=False)
+            side_b = m.clip(normal=normal, origin=origin, invert=True)
+
+            na = getattr(side_a, "n_cells", 0)
+            nb = getattr(side_b, "n_cells", 0)
+            if na >= nb:
+                return side_a
+            return side_b
+        
+        cut_mesh = mesh
+        
+        for tunnel, flags in self._open_end_map.items():
+            nodes = getattr(tunnel, "nodes", None)
+            if not nodes or len(nodes) < 2:
+                continue
+
+            if flags.get("open_first", False):
+                p0, p1 = nodes[0], nodes[1]
+                origin = (p0.x, p0.y, p0.z)
+                normal = _vec(p0, p1) # outward = opposite of first segment
+                cut_mesh = _clip_keep_inside(cut_mesh, normal, origin)
+            
+            if flags.get("open_last", False):
+                pm1, pn = nodes[-2], nodes[-1]
+                origin = (pn.x, pn.y, pn.z)
+                normal = _vec(pn, pm1) # outward = along last segment
+                cut_mesh = _clip_keep_inside(cut_mesh, normal, origin)
+
+        self._opened_mesh = cut_mesh
+        return cut_mesh
 
 if __name__ == "__main__":
     app = QtWidgets.QApplication(sys.argv)
