@@ -846,12 +846,12 @@ class MainWindow(QtWidgets.QMainWindow):
         try:
             mg = self.mesh_generator
             try:
-                mesh_generator_to_gazebo_model(mg, model_folder)
+                mesh_generator_to_gazebo_model(mg, model_folder, name)
             except TypeError:
                 mesh_obj = getattr(mg, "mesh", getattr(mg, "pyvista_mesh", None))
                 if mesh_obj is None:
                     raise RuntimeError("No mesh attribute found on mesh_generator")
-                mesh_generator_to_gazebo_model(mesh_obj, model_folder)
+                mesh_generator_to_gazebo_model(mesh_obj, model_folder, name)
         except Exception as e:
             QtWidgets.QMessageBox.critical(self, "Export failed", f"Gazebo export failed:\n{e}")
             return

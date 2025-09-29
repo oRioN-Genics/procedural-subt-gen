@@ -26,7 +26,7 @@ WORLD_BASE_TEXT = """<sdf version='1.7'>
 """
 
 MODEL_BASE_SDF = """<?xml version="1.0"?>
-<sdf version="1.6">
+<sdf version="1.7">
     <model name="{}">
         <static>true</static>
         <link name="link">
@@ -49,6 +49,19 @@ MODEL_BASE_SDF = """<?xml version="1.0"?>
         </link>
     </model>
 </sdf>"""
+
+MODEL_CONFIGURATION = """<?xml version="1.0"?>
+<model>
+  <name>{}</name>
+  <version>1.0</version>
+  <sdf version="1.7">model.sdf</sdf>
+  <author>
+    <name>sathsara</name>
+    <email>sathsara2021@gmail.com</email>
+  </author>
+  <description>Procedurally generated tunnel</description>
+</model>
+"""
 
 MATERIAL_TEXT = """
                 <material>
