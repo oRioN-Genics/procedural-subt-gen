@@ -26,7 +26,7 @@ WORLD_BASE_TEXT = """<sdf version='1.7'>
 """
 
 MODEL_BASE_SDF = """<?xml version="1.0"?>
-<sdf version="1.6">
+<sdf version="1.7">
     <model name="{}">
         <static>true</static>
         <link name="link">
@@ -34,6 +34,7 @@ MODEL_BASE_SDF = """<?xml version="1.0"?>
             <collision name="collision">
                 <geometry>
                     <mesh>
+                        <!-- Add the relative path here -->\n\
                         <uri>{}</uri>
                     </mesh>
                 </geometry>
@@ -41,6 +42,7 @@ MODEL_BASE_SDF = """<?xml version="1.0"?>
             <visual name='CaveWall_visual'>
                     <geometry>
                       <mesh>
+                        <!-- Add the relative path here -->\n\
                         <uri>{}</uri>
                       </mesh>
                     </geometry>
@@ -50,8 +52,21 @@ MODEL_BASE_SDF = """<?xml version="1.0"?>
     </model>
 </sdf>"""
 
+MODEL_CONFIGURATION = """<?xml version="1.0"?>
+<model>
+  <name>{}</name>
+  <version>1.0</version>
+  <sdf version="1.7">model.sdf</sdf>
+  <author>
+    <name>sathsara</name>
+    <email>sathsara2021@gmail.com</email>
+  </author>
+  <description>Procedurally generated tunnel</description>
+</model>
+"""
+
 MATERIAL_TEXT = """
-                <material>
+                <!-- <material>
                   <diffuse>1 1 1 1</diffuse>
                   <specular>1 1 1 1</specular>
                   <pbr>
@@ -66,7 +81,7 @@ MATERIAL_TEXT = """
                     <uri>materials/textures/</uri>
                     <name>CaveTile/CaveWall_Diffuse</name>
                   </script>
-                </material>
+                </material> -->
                 """
 
 WOLD_IMPORT_BASE_TEXT = """
